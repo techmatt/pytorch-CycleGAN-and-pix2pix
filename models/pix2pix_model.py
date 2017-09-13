@@ -62,8 +62,15 @@ class Pix2PixModel(BaseModel):
         self.input_B.resize_(input_B.size()).copy_(input_B)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
+        #print('inputA size: ' + str(self.input_A.size()))
+        #print('inputB size: ' + str(self.input_B.size()))
+
     def forward(self):
+
         self.real_A = Variable(self.input_A)
+
+        #print('realA size: ' + str(self.real_A.size()))
+
         self.fake_B = self.netG.forward(self.real_A)
         self.real_B = Variable(self.input_B)
 
