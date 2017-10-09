@@ -84,6 +84,7 @@ class Visualizer():
                 links = []
 
                 for label, image_numpy in visuals.items():
+                    #print('image size: ' + str(image_numpy.shape))
                     img_path = 'epoch%.3d_%s.png' % (n, label)
                     ims.append(img_path)
                     txts.append(label)
@@ -131,6 +132,7 @@ class Visualizer():
         for label, image_numpy in visuals.items():
             image_name = '%s_%s.png' % (name, label)
             save_path = os.path.join(image_dir, image_name)
+            #print('image size: ' + str(image_numpy.size()))
             util.save_image(image_numpy, save_path)
 
             ims.append(image_name)

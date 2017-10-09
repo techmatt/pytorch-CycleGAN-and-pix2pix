@@ -23,24 +23,44 @@ class MaskedDataset(BaseDataset):
 
         self.transform = transforms.Compose(transform_list)
 
+        self.yMaskCutoff = 50
+        self.maskYIndices = [i for i in range(0, opt.fineSize)]
+        for i in range(0, self.yMaskCutoff):
+            self.maskYIndices[i] = self.yMaskCutoff * 2 - i
+        self.maskYIndices = torch.LongTensor(self.maskYIndices)
+
+        self.maskTensor = torch.Tensor(self.opt.fineSize, self.opt.fineSize)
+        self.maskTensor.fill_(0.0)
+        for i in range(0, self.yMaskCutoff):
+            self.maskTensor[i,:].fill_(0.5 + 0.5 * i / self.yMaskCutoff)
+
+
     def applyRandomMask(self, A):
         #self.A = self.Tensor(opt.input_nc, opt.fineSize, opt.fineSize)
 
         result = torch.Tensor(4, self.opt.fineSize, self.opt.fineSize)
 
-        result[0:3, :, :].copy_(A)
-        result[3, :, :].fill_(0.0)
+        #print(self.maskYIndices)
 
-        maskW = random.randint(self.opt.mask_rect_min_size, self.opt.mask_rect_max_size)
-        maskH = random.randint(self.opt.mask_rect_min_size, self.opt.mask_rect_max_size)
+        #fixedA = A.index_select(1, self.maskYIndices)
+        #print(fixedA.size())
 
-        w = A.size(2)
-        h = A.size(1)
-        w_offset = random.randint(0, max(0, w - maskW - 1))
-        h_offset = random.randint(0, max(0, h - maskH - 1))
+        result[0:3, :, :] = A.index_select(1, self.maskYIndices)
+        result[3, :, :].copy_(self.maskTensor)
 
-        maskTensor = result[:, h_offset:h_offset + maskH, w_offset:w_offset + maskW]
-        maskTensor.fill_(1.0)
+        #result[0:3, :, :].copy_(A)
+        #result[3, :, :].fill_(0.0)
+
+        #maskW = random.randint(self.opt.mask_rect_min_size, self.opt.mask_rect_max_size)
+        #maskH = random.randint(self.opt.mask_rect_min_size, self.opt.mask_rect_max_size)
+
+        #w = A.size(2)
+        #h = A.size(1)
+        #w_offset = random.randint(0, max(0, w - maskW - 1))
+        #h_offset = random.randint(0, max(0, h - maskH - 1))
+
+        #maskTensor = result[:, h_offset:h_offset + maskH, w_offset:w_offset + maskW]
+        #maskTensor.fill_(1.0)
 
         return result
 
@@ -49,11 +69,16 @@ class MaskedDataset(BaseDataset):
         A_path = self.A_paths[index]
         ARaw = Image.open(A_path).convert('RGB')
 
-        ARaw = ARaw.resize((self.opt.loadSize * 2, self.opt.loadSize), Image.BICUBIC)
+        squareDim = min(ARaw.size[0] - 1, ARaw.size[1] - 1)
+        xStart = random.randint(0, ARaw.size[0] - squareDim)
+        yStart = random.randint(0, ARaw.size[1] - squareDim)
+        ARaw = ARaw.crop((xStart, yStart, xStart + squareDim, yStart + squareDim))
+
+        ARaw = ARaw.resize((self.opt.loadSize, self.opt.loadSize), Image.BICUBIC)
         ARaw = self.transform(ARaw)
 
         #crop in half because this dataset is AB
-        ARaw = ARaw[:, :, 0:ARaw.size(2)/2]
+        #ARaw = ARaw[:, :, 0:ARaw.size(2)/2]
 
         w = ARaw.size(2)
         h = ARaw.size(1)

@@ -438,7 +438,10 @@ class DenseNetDiscriminator(nn.Module):
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
 
-        n_layers = 5
+        #D1_layers = 3
+        total_layers = 6
+
+        #256
         kw = 4
         padw = int(np.ceil((kw-1)/2))
         sequence = [
@@ -446,9 +449,10 @@ class DenseNetDiscriminator(nn.Module):
             nn.LeakyReLU(0.2, True)
         ]
 
+        #128
         nf_mult = 1
         nf_mult_prev = 1
-        for n in range(1, n_layers):
+        for n in range(1, total_layers):
             nf_mult_prev = nf_mult
             nf_mult = min(2**n, 8)
             sequence += [
@@ -458,24 +462,34 @@ class DenseNetDiscriminator(nn.Module):
                 nn.LeakyReLU(0.2, True)
             ]
 
-        nf_mult_prev = nf_mult
-        nf_mult = min(2**n_layers, 8)
-        sequence += [
-            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
-                      kernel_size=kw, stride=1, padding=padw, bias=use_bias),
-            norm_layer(ndf * nf_mult),
-            nn.LeakyReLU(0.2, True)
-        ]
-
-        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]
-
-        if use_sigmoid:
-            sequence += [nn.Sigmoid()]
+        #512x4x4
+        sequence += [nn.Conv2d(ndf * nf_mult, 128, kernel_size=1, stride=1, padding=0)]
 
         self.model = nn.Sequential(*sequence)
 
+        self.linearADim = 128 * 4 * 4
+        self.linearBDim = 1024
+        self.linearA = nn.Linear(self.linearADim, self.linearBDim)
+        self.linearB = nn.Linear(self.linearBDim, 16)
+
+        self.use_sigmoid = use_sigmoid
+
     def forward(self, input):
         if len(self.gpu_ids) and isinstance(input.data, torch.cuda.FloatTensor):
-            return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            output = nn.parallel.data_parallel(self.model, input, self.gpu_ids)
         else:
-            return self.model(input)
+            output = self.model(input)
+
+        #print('start size: ' + str(output.size()))
+        output = output.view(output.size()[0], self.linearADim)
+        #print('flat size: ' + str(output.size()))
+        output = self.linearA(output)
+        #print('linearA size: ' + str(output.size()))
+        output = self.linearB(output)
+        #print('linearB size: ' + str(output.size()))
+
+        if self.use_sigmoid:
+            output = nn.Sigmoid(output)
+
+        return output
+
